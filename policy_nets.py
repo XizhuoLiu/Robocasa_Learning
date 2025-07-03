@@ -1367,6 +1367,9 @@ class TransformerGMMBSplineActorNetwork(TransformerGMMActorNetwork):
             encoder_kwargs=None,
     ):
             self.ac_dim = ac_dim
+            self.num_control_points = transformer_context_length - 2           
+            self.context_length = transformer_context_length
+         
             super().__init__(
                 obs_shapes=obs_shapes,
                 ac_dim=ac_dim,
@@ -1389,8 +1392,6 @@ class TransformerGMMBSplineActorNetwork(TransformerGMMActorNetwork):
                 goal_shapes=goal_shapes,
                 encoder_kwargs=encoder_kwargs,
         )
-            self.num_control_points = transformer_context_length - 2           
-            self.context_length = transformer_context_length
 
             self.activations = {
             "softplus": F.softplus,
@@ -1443,6 +1444,14 @@ class TransformerGMMBSplineActorNetwork(TransformerGMMActorNetwork):
 
         return dists
     
+    def _get_weighted_ctrl_pts(self, dists):
+        means = dists.component_distribution.base_dist.loc
+        weights = torch.softmax(dists.mixture_distribution.logits, dim=-1)
+        weights = weights.unsqueeze(-1).unsqueeze(-1)
+
+        ctrl_pts = torch.sum(weights * means, dim=1)
+        return ctrl_pts
+    
     def forward(self, obs_dict, actions=None, goal_dict=None):
         if self._is_goal_conditioned:
             assert goal_dict is not None
@@ -1450,10 +1459,12 @@ class TransformerGMMBSplineActorNetwork(TransformerGMMActorNetwork):
             goal_dict = TensorUtils.unsqueeze_expand_at(goal_dict, size=obs_dict[mod].shape[1], dim=1)
 
         dists = self.forward_train(obs_dict, actions=actions, goal_dict=goal_dict)
-        ctrl_pts = dists.sample()
+        ctrl_pts = self._get_weighted_ctrl_pts(dists)
+        print("ctrl_pts.shape =", ctrl_pts.shape)
 
-        init_pos = obs_dict["robot0_eef_pos"][:, 0]
-        goal_pos = goal_dict["robot0_eef_pos"][:, 0]
+
+        init_pos = obs_dict["robot0_base_to_eef_pos"][:, 0, :3]
+        goal_pos = goal_dict["robot0_base_to_eef_pos"][:, 0, :3]
 
         full_cp = torch.cat([
             init_pos.unsqueeze(1),

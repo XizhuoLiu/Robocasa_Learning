@@ -939,16 +939,25 @@ class BC_Transformer_GMM_BSpline(BC_Transformer_GMM):
             dim=1,
             msg=f"Expected context length {self.context_length}"
         )
-
-        control_points = self.nets["policy"].forward_train(
+        dists = self.nets["policy"].forward_train(
             obs_dict=batch["obs"],
             actions=None,
             goal_dict=batch.get("goal_obs", None),
             low_noise_eval=False,
-        ).sample()
+        )
 
-        init_pos = batch["obs"]["robot0_eef_pos"][:, 0]
-        goal_pos = batch["goal_obs"]["robot0_eef_pos"][:, 0]
+        control_points = self.nets["policy"]._get_weighted_ctrl_pts(dists)
+
+        print("control_points.shape =", control_points.shape)
+
+
+        init_pos = batch["obs"]["robot0_base_to_eef_pos"][:, 0, :3] 
+        goal_dict = batch.get("goal_obs", None)
+        if goal_dict is not None and "robot0_base_to_eef_pos" in goal_dict:
+            goal_pos = goal_dict["robot0_base_to_eef_pos"][:, 0, :3]
+        else:
+            goal_pos = batch["obs"]["robot0_base_to_eef_pos"][:, -1, :3]
+
 
         full_cp = torch.cat([
             init_pos.unsqueeze(1),
@@ -963,8 +972,9 @@ class BC_Transformer_GMM_BSpline(BC_Transformer_GMM):
         return OrderedDict(pred_actions=pred_actions)
     
     def _compute_losses(self, predictions, batch):
-        get_actions = batch["actions"][:, :predictions["pred_actions"].shape[1]]
-        loss = F.mse_loss(predictions["pred_actions"], get_actions)
+        get_actions = batch["actions"][:, :predictions["pred_actions"].shape[1], :3]
+        loss = F.mse_loss(predictions["pred_actions"][..., :3], get_actions[..., :3])
+
         return OrderedDict(
             action_loss = loss,
         )
