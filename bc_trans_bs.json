@@ -74,7 +74,7 @@
                 }
             }
         },
-        "policy_class": "BC_Transformer_BSpline",
+        "policy_class": "BC_Transformer_GMM_BSpline",
         "loss": {
             "l2_weight": 1.0,
             "l1_weight": 0.0,
@@ -87,8 +87,7 @@
         "bspline": {
             "enabled": true,
             "num_control_points": 8, 
-            "use_smooth_loss": true,
-            "num_points": 11
+            "use_smooth_loss": true
         },
         "gmm": {
             "enabled": true,
@@ -111,7 +110,7 @@
             "num_layers": 6,
             "embed_dim": 512,
             "num_heads": 8,
-            "context_length": 10  
+            "context_length": 10
         },
         "language_conditioned": false
     },
